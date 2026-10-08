@@ -512,6 +512,19 @@ ul{margin:0;padding:0;list-style:none;}
 .bform__submit{padding-top:14px;display:flex;flex-direction:column;gap:16px;}
 .bform__submit .btn{width:100%;}
 .bform__note{font-size:14px;color:rgba(255,255,255,.75);}
+.bform__consent{display:flex;align-items:flex-start;gap:12px;}
+.bform__checkbox{
+  appearance:none;-webkit-appearance:none;flex:none;width:20px;height:20px;margin-top:2px;
+  background:var(--white);border:1px solid rgba(255,255,255,.20);border-radius:5px;cursor:pointer;
+  display:grid;place-items:center;transition:box-shadow var(--transition-base),border-color var(--transition-base);
+}
+.bform__checkbox:focus-visible{outline:none;border-color:var(--taupe);box-shadow:0 0 0 3px rgba(183,166,147,.35);}
+.bform__checkbox::after{content:"";width:10px;height:6px;border-left:2px solid var(--espresso);border-bottom:2px solid var(--espresso);
+  transform:rotate(-45deg) translate(1px,-1px);opacity:0;transition:opacity var(--transition-fast);}
+.bform__checkbox:checked::after{opacity:1;}
+.bform__consent-text{font-size:13px;line-height:1.5;color:rgba(255,255,255,.75);cursor:pointer;}
+.bform__error{display:none;font-size:14px;line-height:1.5;color:var(--white);
+  background:rgba(255,255,255,.10);border:1px solid var(--border-inverse);border-radius:8px;padding:12px 16px;}
 .bform__ok{display:none;font-size:15px;line-height:1.6;color:var(--white);
   border:1px solid var(--border-inverse);border-radius:8px;padding:16px;}
 
@@ -1278,10 +1291,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <input id="f-phone" name="phone" type="tel" aria-label="Phone" placeholder="Phone" autocomplete="tel" required>
         <input id="f-email" name="email" type="email" aria-label="Email" placeholder="Email" autocomplete="email" required>
         <textarea id="f-msg" name="message" aria-label="What would you like treated?" placeholder="What would you like treated?"></textarea>
+        <div class="bform__consent">
+          <input id="f-consent" name="newsletter" type="checkbox" class="bform__checkbox" required>
+          <label for="f-consent" class="bform__consent-text"><i>By submitting this form, you agree to receive marketing text messages, alerts, and notifications from ANU Face, Mind &amp; Body. Message frequency may vary. Rates may be applied. You can opt out at any time by replying STOP.</i></label>
+        </div>
+        <div id="formError" class="bform__error" role="alert" aria-live="polite"></div>
         <div class="bform__submit">
           <button class="btn btn--white" type="submit">Claim $4 per unit <span class="btn__arrow">&rarr;</span></button>
           <span class="bform__note">Consultation included at no charge. Individual results vary.</span>
-          <p class="bform__ok" id="formOk" role="status">Thank you. Your request has been noted and the clinic will call you to confirm a time.</p>
+          <p class="bform__ok" id="formOk" role="status">Thank you. Your request has been received and the clinic will call you to confirm a time.</p>
         </div>
       </div>
     </form>
@@ -1723,27 +1741,111 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     /* Booking form */
     var form = document.getElementById("bookingForm");
     if (form) {
+      var submitBtn = form.querySelector("button[type=submit]");
+      var errEl = document.getElementById("formError");
+      var okEl = document.getElementById("formOk");
+
+      function showError(msg){
+        errEl.textContent = msg;
+        errEl.style.display = msg ? "block" : "none";
+      }
+      function markField(f, bad){
+        f.style.borderColor = bad ? "#B7A693" : "";
+        f.style.boxShadow = bad ? "0 0 0 3px rgba(183,166,147,.45)" : "";
+        if (bad && hasGsap && !REDUCED) gsap.fromTo(f, { x:-4 }, { x:0, duration:0.3, ease:"power2.out" });
+      }
+      function setBusy(busy){
+        submitBtn.disabled = busy;
+        submitBtn.style.opacity = busy ? ".6" : "";
+      }
+
       form.addEventListener("submit", function(e){
         e.preventDefault();
+        showError("");
+
+        var firstEl = document.getElementById("f-first");
+        var lastEl = document.getElementById("f-last");
+        var phoneEl = document.getElementById("f-phone");
+        var emailEl = document.getElementById("f-email");
+        var msgEl = document.getElementById("f-msg");
+        var consentEl = document.getElementById("f-consent");
+
+        var first_name = firstEl.value.trim();
+        var last_name = lastEl.value.trim();
+        var email = emailEl.value.trim();
+        var message = msgEl.value.trim();
+        var phoneDigits = phoneEl.value.replace(/\D/g, "");
+        if (phoneDigits.length === 11 && phoneDigits.charAt(0) === "1") phoneDigits = phoneDigits.slice(1);
+        var checkbox = consentEl.checked ? "on" : "";
+
         var ok = true;
-        ["f-first","f-last","f-phone","f-email"].forEach(function(id){
-          var f = document.getElementById(id);
-          if (!f.value.trim() || (f.type === "email" && f.value.indexOf("@") < 0)) {
-            ok = false;
-            f.style.borderColor = "#B7A693";
-            f.style.boxShadow = "0 0 0 3px rgba(183,166,147,.45)";
-            if (hasGsap && !REDUCED) gsap.fromTo(f, { x:-4 }, { x:0, duration:0.3, ease:"power2.out" });
-          } else {
-            f.style.borderColor = "";
-            f.style.boxShadow = "";
-          }
+        [firstEl, lastEl, phoneEl, emailEl].forEach(function(f){
+          var bad = !f.value.trim();
+          markField(f, bad);
+          if (bad) ok = false;
         });
-        if (!ok) return;
-        var msg = document.getElementById("formOk");
-        msg.style.display = "block";
-        if (hasGsap && !REDUCED) gsap.fromTo(msg, { autoAlpha:0, y:16 }, { autoAlpha:1, y:0, duration:0.3, ease:"power3.out" });
-        form.querySelector("button[type=submit]").disabled = true;
-        form.querySelector("button[type=submit]").style.opacity = ".6";
+        if (!ok) { showError("Please fill in all required fields."); return; }
+
+        var emailRe = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
+        if (!emailRe.test(email)) {
+          markField(emailEl, true);
+          showError("Please enter a valid email address.");
+          return;
+        }
+        if (!/^[0-9]{10}$/.test(phoneDigits)) {
+          markField(phoneEl, true);
+          showError("Please enter a 10-digit US phone number.");
+          return;
+        }
+        if (!consentEl.checked) {
+          showError("Please agree to receive messages so we can confirm your visit.");
+          return;
+        }
+
+        setBusy(true);
+
+        var fd = new FormData();
+        fd.append("first_name", first_name);
+        fd.append("last_name", last_name);
+        fd.append("phone", "+1" + phoneDigits);
+        fd.append("email", email);
+        fd.append("checkbox", checkbox);
+        fd.append("organization", "0a165aaa-3f2a-4b68-b475-66cf5c67cc8a");
+        fd.append("form", "600");
+        fd.append("message", message);
+        fd.append("form_location", window.location.href);
+
+        var urlParams = new URLSearchParams(window.location.search);
+        var trackingMap = { gclid:"google", wbraid:"google", gbraid:"google", fbclid:"meta", ttclid:"tiktok" };
+        var trackingParam = "";
+        var adSource = "other";
+        for (var param in trackingMap) {
+          var val = urlParams.get(param);
+          if (val) { trackingParam = val; adSource = trackingMap[param]; break; }
+        }
+        fd.append("tracking_param", trackingParam);
+        fd.append("ad_source", adSource);
+
+        fetch("https://api.aevadigital.com/api/v1/contacts/add_contact_from_form/", { method:"POST", body:fd })
+          .then(function(res){
+            if (!res.ok) {
+              return res.text().catch(function(){ return res.statusText; }).then(function(txt){
+                throw new Error(txt || "Server error");
+              });
+            }
+            window.dataLayer = window.dataLayer || [];
+            window.dataLayer.push({ "event": "form-success" });
+
+            okEl.style.display = "block";
+            if (hasGsap && !REDUCED) gsap.fromTo(okEl, { autoAlpha:0, y:16 }, { autoAlpha:1, y:0, duration:0.3, ease:"power3.out" });
+            form.reset();
+            form.querySelectorAll("input, textarea").forEach(function(f){ f.disabled = true; });
+          })
+          .catch(function(err){
+            console.error(err);
+            showError("Submission failed. Please try again or call the clinic.");
+            setBusy(false);
+          });
       });
     }
   }
